@@ -9,35 +9,35 @@ private:
     Device _device;
     cl_mem _buffer;
     size_t _length;
+    size_t _allocLength;
+    cl_mem_flags _flag;
     
 public:
     ///長さを指定してBufferを作ります
     this(Device device, size_t length, string flag = "rw"){
         _device = device;
         _length = length;
+        _allocLength = length;
         
         cl_errcode err;
-        cl_mem_flags flags;
         
         final switch(flag){
             case "r":
-                flags = cl_mem_flags.CL_MEM_READ_ONLY;
+                _flag = cl_mem_flags.CL_MEM_READ_ONLY;
                 break;
             case "w":
-                flags = cl_mem_flags.CL_MEM_WRITE_ONLY;
+                _flag = cl_mem_flags.CL_MEM_WRITE_ONLY;
                 break;
             case "rw":
-                flags = cl_mem_flags.CL_MEM_READ_WRITE;
+                _flag = cl_mem_flags.CL_MEM_READ_WRITE;
                 break;
         }
         
         _buffer = clCreateBuffer(   _device.clContext,
-                                    flags,
+                                    _flag,
                                     length * T.sizeof,
                                     null,
                                     &err);
-        //import std.stdio;
-        //writeln(err);
         assert(err == CL_SUCCESS);
         
     }
@@ -59,6 +59,11 @@ public:
                                     null,
                                     null);
         assert(err == CL_SUCCESS);
+    }
+    
+    
+    ~this(){
+        clReleaseMemObject(_buffer);
     }
     
     
@@ -95,6 +100,37 @@ public:
         assert(err == CL_SUCCESS);
         
         return dst;
+    }
+    
+    
+    ///バッファに値を書き込みます
+    @property
+    void array(T[] arr){
+        if(_allocLength > arr.length){
+            _length = arr.length;
+            
+            cl_errcode err = clEnqueueWriteBuffer(  _device.clCommandQueue,
+                                                    _buffer,
+                                                    true,
+                                                    0,
+                                                    _length * T.sizeof,
+                                                    arr.ptr,
+                                                    0,
+                                                    null,
+                                                    null);
+        }else{
+            _length = arr.length;
+            
+            cl_errcode err;
+            _buffer = clCreateBuffer(   _device.clContext,
+                                        _flag,
+                                        _length * T.sizeof,
+                                        null,
+                                        &err);
+            assert(err == CL_SUCCESS);
+            
+            
+        }
     }
     
     

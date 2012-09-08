@@ -6,6 +6,7 @@ import cl4d.kernel;
 
 import std.array;
 import std.algorithm;
+import std.typecons;
 
 ///デバイスに関連付けられているプログラムを表します
 class Program{
@@ -57,20 +58,34 @@ public:
     }
     
     
+    ~this(){
+        clReleaseProgram(_program);
+    }
+    
+    
     ///内部で保持している値を返します
     @property
     Device device(){
         return _device;
     }
     
+    
+    ///ditto
     @property
     cl_program clProgram(){
         return _program;
     }
+    
     
     ///カーネルを取得します
     Kernel kernel(string kernelName){
         return new Kernel(this, kernelName);
     }
     
+    
+    ///opDispatch
+    void opDispatch(string kernelName, T...)(Tuple!(size_t, size_t)[] dims, T args){
+        auto kernel = new Kernel(this, kernelName);
+        kernel.set(dims, args);
+    }
 }

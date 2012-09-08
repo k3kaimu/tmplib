@@ -208,7 +208,7 @@ public:
     
     
     ///デバイスにプログラムをセットし、ビルドします
-    Program built(Text...)(Text text){
+    Program build(Text...)(Text text){
         return new Program(this, text);
     }
     
@@ -262,7 +262,7 @@ public:
         auto input = this.allocate(rangeArray);
         auto result = this.allocate!(typeof(range.front))(dim[0]);
         
-        this.built(repeatBody).kernel("foreachFunction").set([dim], input, result);
+        this.build(repeatBody).kernel("foreachFunction").set([dim], input, result);
         
         return result;
     }
