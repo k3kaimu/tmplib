@@ -9,8 +9,8 @@ pragma(lib, "opencl");
 pragma(lib, "cl4d");
 
 void main(){
-    Device device = clCurrent.devices.values[0][0]; ///get device info
-    device.info!(Device.Info.Type).writeln;     ///get device
+    Device device = clCurrent.devices.values[0][0]; ///get device
+    device.info!(Device.Info.Vendor).writeln;       ///get device info
     
     //clDevice + array(or ptr + size) -> clBuffer
     auto vec1 = device.allocate(iota(1024).array),
@@ -42,6 +42,14 @@ void main(){
     //execute all task
     clCurrent.execute();
     
-    writeln(vec3.array);
-    writeln(vec4.array);
+    writeln(vec3.array);    //result [0, 2, 4, 6, 8, ...]
+    writeln(vec4.array);    //result [0, 0, 0, 0, 0, ...]
+    
+    //paralellForreach
+    auto result = device.parallelForeach(tuple(1024u << 4, 32u), iota(1024 << 4),q{
+        b = a * 3;
+    });
+    
+    //result [0, 3, 6, 12, 15, ... 297]
+    writeln(result.array[0..100]);
 }

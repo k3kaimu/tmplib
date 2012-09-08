@@ -4,18 +4,18 @@ import cl4d.c.cl;
 import cl4d.device;
 
 ///cl_platform_idを隠蔽する型
-struct Platform{
+class Platform{
 private:
     cl_platform_id _platform;
     
 public:
-    this(cl_platform_id platformID){
-        _platform = platformID;
+    this(cl_platform_id clPlatformID){
+        _platform = clPlatformID;
     }
     
     ///idを取得します
     @property
-    cl_platform_id platformId(){
+    cl_platform_id clPlatformId(){
         return _platform;
     }
     
@@ -48,29 +48,28 @@ public:
     ///deviceTypeなdeviceを取得します。
     Device[] devices(Device.Type deviceType = Device.Type.All)
     {
+        import std.stdio;
         cl_uint num;
         cl_device_id[] devices;
-        
         cl_errcode err = clGetDeviceIDs(_platform,
-                                    *cast(cl_device_type*)(&deviceType),
+                                    *cast(cl_device_type*)&deviceType,
                                     0,
                                     null,
                                     &num);
         
-        
         devices = new cl_device_id[num];
         
         err = clGetDeviceIDs(_platform,
-                             *cast(cl_device_type*)deviceType,
+                             *cast(cl_device_type*)&deviceType,
                              num,
                              devices.ptr,
                              null);
         assert(err == CL_SUCCESS);
-        
+
         Device[] dst;
         
         foreach(d; devices)
-            dst ~= new Device(d);
+            dst ~= new Device(this, d);
         
         return dst;
     }

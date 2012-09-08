@@ -1,62 +1,77 @@
 ﻿module cl4d.device;
 
 import cl4d.c.cl;
+import cl4d.platform;
+import cl4d.program;
+import cl4d.kernel;
+import cl4d.buffer;
 
 import std.algorithm;
 import std.range;
 import std.string;
 import std.typecons;
+import std.traits;
+
 
 
 ///cl_device_idを隠蔽する型です。
 class Device{
 private:
-    cl_device_id _deviceId;
-    cl_context _context;
-    cl_command_queue _commandQueue;
+    Platform _platform;             //所属するプラットフォーム
+    cl_device_id _deviceId;         //device_id
+    cl_context _context;            //デバイスのコンテキスト
+    cl_command_queue _commandQueue; //コマンドキュー
 
 public:
     
     ///内部で保持している値を返します
     @property
-    cl_device_id deviceId(){
+    Platform platform(){
+        return _platform;
+    }
+    
+    
+    ///ditto
+    @property
+    cl_device_id clDeviceId(){
         return _deviceId;
     }
     
     
     ///ditto
     @property
-    cl_context context(){
+    cl_context clContext(){
         return _context;
     }
     
     
     ///ditto
     @property
-    cl_command_queue commandQueue(){
+    cl_command_queue clCommandQueue(){
         return _commandQueue;
     }
         
     
     ///コンストラクタ
-    this(cl_device_id deviceId){
+    this(Platform platform, cl_device_id deviceId){
+        _platform = platform;
         _deviceId = deviceId;
         cl_errcode err;
         
-        _context = clCreateContext( null,
+        auto id = info!(Info.Platform);
+        int[] cps = [0];
+        _context = clCreateContext( cast(cl_context_properties*)cps.ptr,
                                     1,
                                     &_deviceId,
                                     null,
                                     null,
                                     &err);
-        
         assert(err == CL_SUCCESS);
         
         _commandQueue = clCreateCommandQueue(   _context,
                                                 _deviceId,
-                                                cl_bitfield(0),
+                                                0,
                                                 &err);
-        
         assert(err == CL_SUCCESS);              
     }
     
@@ -92,9 +107,10 @@ public:
                                                 InfoType.returnType.sizeof * n,
                                                 dst.ptr,
                                                 &dstsize);
+                
                 assert(err == CL_SUCCESS);
-                if(dstsize < InfoType.returnType.sizeof * n)
-                    dst = dst[0..dstsize/InfoType.returnType.sizeof];
+                if(dstsize < ForeachType!(InfoType.returnType).sizeof * n)
+                    dst = dst[0..dstsize/ForeachType!(InfoType.returnType).sizeof];
                 return dst;
             }
         }else{
@@ -158,12 +174,12 @@ public:
         struct CompilerAvailable{alias cl_bool returnType; enum value = CL_DEVICE_COMPILER_AVAILABLE;}
         struct ExecutionCapabilities{alias cl_device_exec_capabilities returnType; enum value = CL_DEVICE_EXECUTION_CAPABILITIES;}
         struct QueueProperties{alias cl_command_queue_properties returnType; enum value = CL_DEVICE_QUEUE_PROPERTIES;}
-        struct Name{alias string returnType; enum value = CL_DEVICE_NAME;}
-        struct Vendor{alias string returnType; enum value = CL_DEVICE_VENDOR;}
-        struct DriverVersion{alias string returnType; enum value = CL_DRIVER_VERSION;}
-        struct Profile{alias string returnType; enum value = CL_DEVICE_PROFILE;}
-        struct Version{alias string returnType; enum value = CL_DEVICE_VERSION;}
-        struct Extensions{alias string returnType; enum value = CL_DEVICE_EXTENSIONS;}
+        struct Name{alias char[] returnType; enum value = CL_DEVICE_NAME;}
+        struct Vendor{alias char[] returnType; enum value = CL_DEVICE_VENDOR;}
+        struct DriverVersion{alias char[] returnType; enum value = CL_DRIVER_VERSION;}
+        struct Profile{alias char[] returnType; enum value = CL_DEVICE_PROFILE;}
+        struct Version{alias char[] returnType; enum value = CL_DEVICE_VERSION;}
+        struct Extensions{alias char[] returnType; enum value = CL_DEVICE_EXTENSIONS;}
         struct Platform{alias cl_platform_id returnType; enum value = CL_DEVICE_PLATFORM;}
         struct DoubleFpConfig{alias cl_device_fp_config returnType; enum value = CL_DEVICE_DOUBLE_FP_CONFIG;}
         struct PreferredVectorWidthHalf{alias cl_uint returnType; enum value = CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF;}
@@ -175,9 +191,9 @@ public:
         struct NativeVectorWidthFloat{alias cl_uint returnType; enum value = CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT;}
         struct NativeVectorWidthDouble{alias cl_uint returnType; enum value = CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE;}
         struct NativeVectorWidthHalf{alias cl_uint returnType; enum value = CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF;}
-        struct OpenclCVersion{alias string returnType; enum value = CL_DEVICE_OPENCL_C_VERSION;}
+        struct OpenclCVersion{alias char[] returnType; enum value = CL_DEVICE_OPENCL_C_VERSION;}
         struct LinkerAvailable{alias cl_bool returnType; enum value = CL_DEVICE_LINKER_AVAILABLE;}
-        struct BuiltInKernels{alias string returnType; enum value = CL_DEVICE_BUILT_IN_KERNELS;}
+        struct BuiltInKernels{alias char[] returnType; enum value = CL_DEVICE_BUILT_IN_KERNELS;}
         struct ImageMaxBufferSize{alias size_t returnType; enum value = CL_DEVICE_IMAGE_MAX_BUFFER_SIZE;}
         struct ImageMaxArraySize{alias size_t returnType; enum value = CL_DEVICE_IMAGE_MAX_ARRAY_SIZE;}
         struct ParentDevice{alias cl_device_id returnType; enum value = CL_DEVICE_PARENT_DEVICE;}
@@ -193,138 +209,7 @@ public:
     
     ///デバイスにプログラムをセットし、ビルドします
     Program built(Text...)(Text text){
-        return new Program(text);
-    }
-    
-    
-    ///デバイスに関連付けられているプログラムを表します
-    class Program{
-    private:
-        cl_program _program;
-        
-    public:
-        ///コンストラクタ。ファイルや文字列からプログラムを作製し、ビルドします
-        this(Text...)(Text files){
-            string[] codes;
-            foreach(i, T; Text){
-                static if(is(T == std.stdio.File)){
-                    string src;
-                    foreach(s; files[i].byLine)
-                        src ~= s;
-                    
-                    codes ~= src;
-                }else static if(is(T : string)){
-                    codes ~= files[i];
-                }else{
-                    static assert(0);
-                }
-            }
-            
-            immutable(char)*[] cps = array(map!"a.ptr"(codes));
-            size_t[] lengths = array(map!"a.length"(codes));
-            cl_errcode err;
-            
-            _program = clCreateProgramWithSource(   this.outer._context,
-                                                    codes.length,
-                                                    cps.ptr,
-                                                    lengths.ptr,
-                                                    &err);
-            
-            assert(err == CL_SUCCESS);
-            
-            err = clBuildProgram(   _program,
-                                    1,
-                                    &(this.outer._deviceId),
-                                    null,
-                                    null,
-                                    null);
-            
-            assert(err == CL_SUCCESS);
-        }
-        
-        
-        ///内部で保持している値を返します
-        @property
-        cl_program program(){
-            return _program;
-        }
-        
-        ///カーネルを取得します
-        Kernel kernel(string kernelName){
-            return new Kernel(kernelName);
-        }
-        
-        
-        ///カーネルを表すためのクラスです
-        class Kernel{
-        private:
-            cl_kernel _kernel;
-        
-        public:
-            ///コンストラクタ
-            this(string name){
-                cl_errcode err;
-                cl_kernel _kernel = clCreateKernel(  this.outer._program,
-                                                    toStringz(name),
-                                                    &err);
-                
-                assert(err == CL_SUCCESS);
-            }
-            
-            
-            ~this(){
-                clReleaseKernel(_kernel);
-            }
-            
-            
-            ///内部で保持している値を返します
-            @property
-            cl_kernel kernel(){
-                return _kernel;
-            }
-            
-            
-            ///Kernelに実行時のスレッド数と引数とセットします
-            void set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
-                cl_errcode err;
-                foreach(idx, U; T){
-                    static if(is(U N : Buffer!N)){
-                        cl_mem buf = args[idx].buffer;
-                        err = clSetKernelArg(_kernel,
-                                                    idx,
-                                                    size_t.sizeof,
-                                                    &buf);
-                    }else static if(is(U == Local)){
-                        cl_errcode err = clSetKernelArg(_kernel,
-                                                    idx,
-                                                    args[idx].size,
-                                                    null);
-                    }else{
-                        cl_errcode err = clSetKernelArg(_kernel,
-                                                    idx,
-                                                    U.sizeof,
-                                                    &(args[idx]));
-                    }
-                        
-                    assert(err == CL_SUCCESS);
-                }
-                
-                size_t[] global = array(map!"a[0]"(dims));
-                size_t[] local =  array(map!"a[1]"(dims));
-                
-                err = clEnqueueNDRangeKernel(   this.outer.outer._commandQueue,
-                                                _kernel,
-                                                dims.length,
-                                                null,
-                                                global.ptr,
-                                                local.ptr,
-                                                0,
-                                                null,
-                                                null);
-                
-                assert(err == CL_SUCCESS);
-            }
-        }
+        return new Program(this, text);
     }
     
     
@@ -348,97 +233,26 @@ public:
     
     
     ///arrayからバッファを作って返します
-    Buffer!T allocate(T)(T[] array, cl_mem_flags flags = cl_mem_flags.CL_MEM_READ_WRITE){
-        return new Buffer!T(array, flags);
+    Buffer!T allocate(T)(T[] array, string flag = "rw"){
+        return new Buffer!T(this, array, flag);
     }
     
     
     ///lengthの長さを持つバッファを作成し、かえします。
-    Buffer!T allocate(T)(size_t length, cl_mem_flags flags = cl_mem_flags.CL_MEM_READ_WRITE){
-        return new Buffer!T(length, flags);
-    }
-    
-    
-    ///デバイスのメモリ空間のバッファを表します
-    class Buffer(T){
-    private:
-        cl_mem _buffer;
-        size_t _length;
-        
-    public:
-        ///長さを指定してBufferを作ります
-        this(size_t length, cl_mem_flags flags = cl_mem_flags.CL_MEM_READ_WRITE){
-            cl_errcode err;
-            T[] buf = new T[length];
-            _buffer = clCreateBuffer(   this.outer._context,
-                                        flags,
-                                        length * T.sizeof,
-                                        buf.ptr,
-                                        &err);
-            assert(err == CL_SUCCESS);
-            _length = length;
-        }
-        
-        
-        ///バッファを指定してBufferを作ります
-        this(T[] buf, cl_mem_flags flags = cl_mem_flags.CL_MEM_READ_WRITE){
-            cl_errcode err;
-            
-            _buffer = clCreateBuffer( this.outer._context,
-                            flags,
-                            buf.length * T.sizeof,
-                            buf.ptr,
-                            &err);
-            
-            assert(err == CL_SUCCESS);
-            _length = buf.length;
-        }
-        
-        
-        ///保持している値を返します
-        @property
-        cl_mem buffer(){
-            return _buffer;
-        }
-        
-        ///バッファから値を取得します
-        @property
-        T[] array(){
-            cl_errcode err;
-            
-            T[] dst = new T[_length];
-            
-            err = clEnqueueReadBuffer(  this.outer._commandQueue,
-                                        _buffer,
-                                        CL_TRUE,
-                                        0,
-                                        _length * T.sizeof,
-                                        dst.ptr,
-                                        0,
-                                        null,
-                                        null);
-            assert(err == CL_SUCCESS);
-            
-            return dst;
-        }
-        
-        
-        ///バッファの大きさを取得します。バイト値にするにはT.sizeof倍してください
-        @property
-        size_t length(){
-            return _length;
-        }
+    Buffer!T allocate(T)(size_t length, string flag = "rw"){
+        return new Buffer!T(this, length, flag);
     }
     
     
     ///このデバイスで単純な繰り返し動作を行うようにします
-    Buffer!(ElementType!(Unqual!(Range)))
-     parallelForeach(string structStr = "", string type = ElementType!(Unqual!(Range)).stringof, Range)
-        (Tuple!(size_t, size_t) dim, Range, string repeatBody)if(isInputRange!(Unqual!Range))
+    Buffer!(ElementType!(Range))
+     parallelForeach(string structStr = "", Range)
+        (Tuple!(size_t, size_t) dim, Range range, string repeatBody)if(isInputRange!(Range))
     {
-        repeatBody = structStr ~ "\n\n__kernel void foreachFunction(__global " ~ type ~ "* range, __global " ~ type ~"* result){\n"
-        ~ "size_t i = get_global_id(0);\n" ~
-        ~ type ~ " a = range[i], b = result[i];" ~ repeatBody ~ "\n result[i] = b;\n}\n";
+        alias ElementType!(Range) E;
+        repeatBody = structStr ~ "\n\n__kernel void foreachFunction(__global " ~ E.stringof ~ "* range, __global " ~ E.stringof ~"* result){\n"
+        ~ "size_t i = get_global_id(0);\n"
+        ~ E.stringof ~ " a = range[i], b = result[i];" ~ repeatBody ~ "\n result[i] = b;\n}\n";
         
         auto rangeArray = array(take(range, dim[0]));
         if(rangeArray.length < dim[0]){
@@ -446,9 +260,9 @@ public:
         }
         
         auto input = this.allocate(rangeArray);
-        auto result = this.allocate!(ElementType!(typeof(rangeType)))(dim[0]);
+        auto result = this.allocate!(typeof(range.front))(dim[0]);
         
-        this.built(repeatBody).kernel("foreachFunction")([dim], input, result);
+        this.built(repeatBody).kernel("foreachFunction").set([dim], input, result);
         
         return result;
     }
