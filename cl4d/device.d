@@ -13,7 +13,6 @@ import std.typecons;
 import std.traits;
 
 
-
 ///cl_device_idを隠蔽する型です。
 class Device{
 private:
@@ -21,6 +20,7 @@ private:
     cl_device_id _deviceId;         //device_id
     cl_context _context;            //デバイスのコンテキスト
     cl_command_queue _commandQueue; //コマンドキュー
+    //DeviceInfo  _info;
 
 public:
     

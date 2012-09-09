@@ -53,7 +53,8 @@ public:
                                 null,
                                 null,
                                 &err);
-        
+        //import std.stdio;
+        //writeln(err);
         assert(err == CL_SUCCESS);
     }
     

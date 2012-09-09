@@ -69,7 +69,7 @@ public:
     
     ///保持している値を返します
     @property
-    cl_mem buffer(){
+    cl_mem clBuffer(){
         return _buffer;
     }
     
@@ -119,18 +119,40 @@ public:
                                                     null,
                                                     null);
         }else{
-            _length = arr.length;
-            
-            cl_errcode err;
-            _buffer = clCreateBuffer(   _device.clContext,
-                                        _flag,
-                                        _length * T.sizeof,
-                                        null,
-                                        &err);
-            assert(err == CL_SUCCESS);
-            
-            
+            this.length(arr.length);
+            array(arr);
         }
+    }
+    
+    
+    ///バッファにバッファをコピーします。
+    @property
+    void copy(Buffer src)
+    in{
+        assert(src.device.clDeviceId == _device.clDeviceId);
+    }
+    body{
+        this.length(src.length);
+        cl_errcode err = clEnqueueCopyBuffer(   _device.clCommandQueue,
+                                                src.clBuffer,
+                                                _buffer,
+                                                0,
+                                                0,
+                                                src.length * T.sizeof,
+                                                0,
+                                                null,
+                                                null);
+        assert(err == CL_SUCCESS);
+    }
+    
+    
+    ///コピーを返します
+    @property
+    Buffer copy()
+    {
+        auto buf = _device.allocate!T(_allocLength);
+        buf.copy(this);
+        return buf;
     }
     
     
@@ -138,5 +160,37 @@ public:
     @property
     size_t length(){
         return _length;
+    }
+    
+    ///バッファの長さを変更します。もしバッファの長さが取得済みより長い場合には、デバイスに溜まっているコマンドキューを消化した後に確保を行います。
+    @property
+    void length(size_t newLength){
+        if(_allocLength >= newLength){
+            _length = newLength;
+        }else{
+            cl_errcode err;
+            _allocLength = newLength;
+            cl_mem newBuffer = clCreateBuffer(  _device.clContext,
+                                                _flag,
+                                                _allocLength * T.sizeof,
+                                                null,
+                                                &err);
+            
+            err = clEnqueueCopyBuffer(  _device.clCommandQueue,
+                                        _buffer,
+                                        newBuffer,
+                                        0,
+                                        0,
+                                        _length * T.sizeof,
+                                        0,
+                                        null,
+                                        null);
+            assert(err == CL_SUCCESS);
+            _device.execute();
+            
+            _length = _allocLength;
+            clReleaseMemObject(_buffer);
+            _buffer = newBuffer;
+        }
     }
 }

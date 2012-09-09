@@ -26,13 +26,12 @@ void main(){
     Device device = clCurrent.platforms[0].devices[0];
     
     //デバイスの情報を得ます。返り値の方はDevice.Info.****によって異なります
-    device.info!(Device.Info.Vendor).writeln;           
-    
+    device.info!(Device.Info.Vendor).writeln;    
     //デバイスのメモリを確保します。配列を渡すとその値をコピーし、int型を渡すとその大きさのメモリを確保します
     auto vec1 = device.allocate(iota(1024).array),
-         vec2 = device.allocate(iota(1024).array),
+         vec2 = vec1.copy,
          vec3 = device.allocate!int(1024),
-         vec4 = device.allocate!int(1024);
+         vec4 = vec3.copy;
     
     //clSrcをビルドします
     auto program = device.build(clSrc);
@@ -41,7 +40,13 @@ void main(){
     program.vecAdd([tuple(1024u, 32u)], vec1, vec2, vec3);
     program.vecSub([tuple(1024u, 32u)], vec1, vec2, vec4);
     
+    vec3.length = 10;       //大きさ変更可能
+    vec4.length = 10;       //同上
+    
     //結果を出力します。 Buffer.arrayはデバイスに関連付けられているコマンドキューに溜まっているコマンドを実行し、Bufferから設定したデータ量を読み込みます
     writeln(vec3.array);    //[0, 2, 4, 6, 8, ...]
     writeln(vec4.array);    //[0, 0, 0, 0, 0, ...]
+    
+    vec4.copy = vec3;
+    writeln(vec4.array);    //[0, 2, 4, 6, 8, ...]
 }

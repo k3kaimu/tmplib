@@ -41,26 +41,26 @@ public:
     }
     
     
-    ///Kernelに実行時のスレッド数と引数とセットします
+    ///Kernelに実行時のスレッド数と引数とセットし、実行するようにコマンドキューに入れ込みます。
     void set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
         cl_errcode err;
         foreach(idx, U; T){
             static if(is(U N : Buffer!N)){
-                cl_mem buf = args[idx].buffer;
-                err = clSetKernelArg(_kernel,
-                                            idx,
-                                            size_t.sizeof,
-                                            &buf);
+                cl_mem buf = args[idx].clBuffer;
+                err = clSetKernelArg(   _kernel,
+                                        idx,
+                                        size_t.sizeof,
+                                        &buf);
             }else static if(is(U == Local)){
                 cl_errcode err = clSetKernelArg(_kernel,
-                                            idx,
-                                            args[idx].size,
-                                            null);
+                                                idx,
+                                                args[idx].size,
+                                                null);
             }else{
                 cl_errcode err = clSetKernelArg(_kernel,
-                                            idx,
-                                            U.sizeof,
-                                            &(args[idx]));
+                                                idx,
+                                                U.sizeof,
+                                                &(args[idx]));
             }
             
             //import std.stdio;
