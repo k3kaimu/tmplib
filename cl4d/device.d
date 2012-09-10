@@ -356,7 +356,7 @@ public:
         
         auto buf = toBuffer(captures);
         import std.stdio;
-        writeln(cbody);
+        //writeln(cbody);
         this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
         
         this.execute();
