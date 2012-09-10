@@ -45,22 +45,23 @@ public:
     void set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
         cl_errcode err;
         foreach(idx, U; T){
-            static if(is(U N : Buffer!N)){
+            static if(isBuffer!U){
                 cl_mem buf = args[idx].clBuffer;
                 err = clSetKernelArg(   _kernel,
                                         idx,
                                         size_t.sizeof,
                                         &buf);
             }else static if(is(U == Local)){
-                cl_errcode err = clSetKernelArg(_kernel,
+                err = clSetKernelArg(_kernel,
                                                 idx,
                                                 args[idx].size,
                                                 null);
             }else{
-                cl_errcode err = clSetKernelArg(_kernel,
+                auto tmp = args[idx];
+                err = clSetKernelArg(_kernel,
                                                 idx,
                                                 U.sizeof,
-                                                &(args[idx]));
+                                                &tmp);
             }
             
             //import std.stdio;
@@ -84,3 +85,5 @@ public:
         assert(err == CL_SUCCESS);
     }
 }
+
+private struct Local{}

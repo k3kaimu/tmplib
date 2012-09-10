@@ -194,3 +194,15 @@ public:
         }
     }
 }
+
+
+///型TがBufferかどうか
+template isBuffer(T){
+    static if(is(typeof({T a; auto b = a.array;}))){
+        static if(is(T == Buffer!(typeof(T.init.array[0]))))
+            enum isBuffer = true;
+        else
+            enum isBuffer = false;
+    }else
+        enum isBuffer = false;
+}

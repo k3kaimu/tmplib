@@ -13,10 +13,10 @@ void main(){
     auto vector2 = device.allocate!(int)(64);
     auto vector3 = device.allocate!(ulong)(64);
     
-    device.Foreach(dims, vector1, vector2, vector3, q{
-        size_t idx = i * 8 + j;
+    device.Foreach(dims, vector1, vector2, vector3, 8, q{
+        size_t idx = i * d + j;
         a[idx].field_0 = j;
-        a[idx].field_1 = i * 8 + j;
+        a[idx].field_1 = i * d + j;
         
         b[idx] = i;
         c[idx] = j;

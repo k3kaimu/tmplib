@@ -334,13 +334,13 @@ public:
             }else{
                 static if(isTuple!U){
                     alias typeof(U.init.tupleof) K;
-                    cbody ~= "__global Tuple";
+                    cbody ~= "Tuple";
                     
                     foreach(k; TypeTuple!(K))
                         cbody ~= "_" ~ k.stringof;
                     cbody ~= "* " ~ cast(immutable(char))('a' + i);
                 }else
-                    cbody ~= "__global " ~ U.stringof ~ " " ~ cast(immutable(char))('a' + i);
+                    cbody ~= toCLC(U.stringof) ~ " " ~ cast(immutable(char))('a' + i);
             }
             
             cbody ~= ", ";
@@ -356,7 +356,7 @@ public:
         
         auto buf = toBuffer(captures);
         import std.stdio;
-        //writeln(cbody);
+        writeln(cbody);
         this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
         
         this.execute();
@@ -417,12 +417,6 @@ public:
                 auto e1 = b[n];
            })));
         }));
-    }
-    
-    
-    template isBuffer(T){
-        enum bool isBuffer = is(typeof({T a; auto b = a.array;})) 
-                            && is(T == Buffer!(typeof(T.init.array[0])));
     }
     
 }
