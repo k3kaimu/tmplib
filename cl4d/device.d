@@ -11,6 +11,8 @@ import std.range;
 import std.string;
 import std.typecons;
 import std.traits;
+import std.typetuple;
+import std.conv;
 
 
 ///cl_device_idを隠蔽する型です。
@@ -232,9 +234,10 @@ public:
     }
     
     
-    ///arrayからバッファを作って返します
-    Buffer!T allocate(T)(T[] array, string flag = "rw"){
-        return new Buffer!T(this, array, flag);
+    ///rangeからバッファを作って返します
+    Buffer!(ElementType!Range) allocate(Range)(Range range, string flag = "rw")if(isInputRange!Range && !isInfinite!(Range)){
+        auto array = array(range);
+        return new typeof(return)(this, array, flag);
     }
     
     
@@ -243,7 +246,7 @@ public:
         return new Buffer!T(this, length, flag);
     }
     
-    
+    /+
     ///このデバイスで単純な繰り返し動作を行うようにします
     Buffer!(ElementType!(Range))
      parallelForeach(string structStr = "", Range)
@@ -263,7 +266,163 @@ public:
         auto result = this.allocate!(typeof(range.front))(dim[0]);
         
         this.build(repeatBody).kernel("foreachFunction").set([dim], input, result);
-        
+        this.execute();
         return result;
+    }+/
+    
+    ///このデバイスで単純な繰り返し動作を行います。
+    void Foreach(string header = "", I, Captures...)(Tuple!(I, I)[] dims, Captures captures, string repeatBody)
+    in{
+        assert(dims.length <= 3);
+        assert(dims.length != 0);
     }
+    body{
+        
+        
+        string[string] createTupleHeaders(){
+            string[string] dst;
+            
+            foreach(i, C; Captures){
+                alias Unqual!C E;
+                
+                static if(isTuple!E){
+                    auto code = createTupleCode!E();
+                    dst[code.name] ~= code.code ~ "\n";
+                }else static if(isInputRange!E && isTuple!(ElementType!E)){
+                    auto code = createTupleCode!(ElementType!E)();
+                    dst[code.name] ~= code.code ~ "\n";
+                }else static if(isBuffer!E && isTuple!(typeof(E.init.array[0]))){
+                    auto code = createTupleCode!(typeof(E.init.array[0]))();
+                    dst[code.name] ~= code.code ~ "\n";
+                }
+            }
+            
+            return dst;
+        }
+        
+        string cbody = header ~ "\n";
+        
+        foreach(e; createTupleHeaders().values){
+            cbody ~= e;
+        }
+        
+        cbody ~= "\n\n__kernel void foreachFunction(";
+        
+        foreach(i, C; Captures){
+            alias Unqual!C U;
+            static if(isInputRange!U){
+                static if(isTuple!(ElementType!U)){
+                    alias typeof(ElementType!U.init.tupleof) K;
+                    cbody ~= "__global Tuple";
+                    
+                    foreach(k; K)
+                        cbody ~= "_" ~ k.stringof;
+                    cbody ~= "* " ~ cast(immutable(char))('a' + i);
+                }else
+                    cbody ~= "__global " ~ ElementType!(U).stringof ~ "* " ~ cast(immutable(char))('a' + i);
+            }else static if(isBuffer!U){
+                alias typeof(U.init.array[0]) V;
+                static if(isTuple!V){
+                    alias typeof(V.init.tupleof) K;
+                    cbody ~= "__global Tuple";
+                    
+                    foreach(k; K)
+                        cbody ~= "_" ~ k.stringof;
+                    cbody ~= "* " ~ cast(immutable(char))('a' + i);
+                }else
+                    cbody ~= "__global " ~ V.stringof ~ "* " ~ cast(immutable(char))('a' + i);
+            }else{
+                static if(isTuple!U){
+                    alias typeof(U.init.tupleof) K;
+                    cbody ~= "__global Tuple";
+                    
+                    foreach(k; TypeTuple!(K))
+                        cbody ~= "_" ~ k.stringof;
+                    cbody ~= "* " ~ cast(immutable(char))('a' + i);
+                }else
+                    cbody ~= "__global " ~ U.stringof ~ " " ~ cast(immutable(char))('a' + i);
+            }
+            
+            cbody ~= ", ";
+        }
+        
+        cbody = cbody[0..$-2] ~ ")\n{\n";
+        
+        foreach(i; 0..dims.length){
+            cbody ~= "    size_t " ~ cast(immutable(char))('i' + i) ~ " = get_global_id(" ~ to!string(i) ~ ");\n"; 
+        }
+        
+        cbody ~= repeatBody ~ "\n}\n";
+        
+        auto buf = toBuffer(captures);
+        import std.stdio;
+        //writeln(cbody);
+        this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
+        
+        this.execute();
+    }
+    
+    private Tuple!(string, "name", string, "code") createTupleCode(T)(T a = T.init)if(isTuple!T){
+        alias typeof(T.init.tupleof) E;
+        static assert(allSatisfy!(isBasicType, E), "Foreach can get array, or tuple of basic types, or OpenCL C basic type.");
+        
+        string name = " Tuple_";
+        string cbody;
+        
+        foreach(int i, e; E){
+            name ~= e.stringof ~ "_";
+            cbody ~= "    " ~ toCLC(e.stringof) ~ " field_" ~ to!string(i) ~ ";\n";
+        }
+        name = name[0..$-1];
+        
+        return typeof(return)(T.stringof, "typedef struct" ~ name ~ "{\n" ~ cbody ~ "}" ~ name ~ ";\n");
+    }
+    
+    private string toCLC(string type){
+        if(type[0] == 'u')
+            return "unsigned " ~ type[1..$];
+        else
+            return type;
+    }
+    
+    private template BufferType(T){
+        static if(isInputRange!T)
+            alias Buffer!(ElementType!T) BufferType;
+        else
+            alias T BufferType;
+    }
+    
+    
+    private Tuple!(staticMap!(BufferType, T)) toBuffer(T...)(T args){
+        typeof(return) dst;
+        
+        foreach(i, E; T){
+            static if(isInputRange!E)
+                dst[i] = this.allocate(args[i]);
+            else
+                dst[i] = args[i];
+        }
+        
+        return dst;
+    }
+    
+    
+    template isTuple(T){
+        enum bool isTuple = is(typeof({
+           T a;
+           auto e0 = a[0];
+           static assert(!is(typeof({
+                T b;
+                size_t n;
+                auto e1 = b[n];
+           })));
+        }));
+    }
+    
+    
+    template isBuffer(T){
+        enum bool isBuffer = is(typeof({T a; auto b = a.array;})) 
+                            && is(T == Buffer!(typeof(T.init.array[0])));
+    }
+    
 }
