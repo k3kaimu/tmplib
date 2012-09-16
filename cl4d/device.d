@@ -5,15 +5,16 @@ import cl4d.platform;
 import cl4d.program;
 import cl4d.kernel;
 import cl4d.buffer;
+import cl4d.taskmanager;
 
 import std.algorithm;
-import std.range;
+import std.range    : isInputRange, isInfinite, ElementType, ForeachType;
 import std.string;
 import std.typecons;
-import std.traits;
+import std.traits   : Unqual, isBasicType;
 import std.typetuple;
 import std.conv;
-
+import std.array    : array;
 
 ///cl_device_idを隠蔽する型です。
 class Device{
@@ -21,10 +22,33 @@ private:
     Platform _platform;             //所属するプラットフォーム
     cl_device_id _deviceId;         //device_id
     cl_context _context;            //デバイスのコンテキスト
-    cl_command_queue _commandQueue; //コマンドキュー
-    //DeviceInfo  _info;
+    TaskManager _taskManager;       //タスク管理
 
 public:
+    ///コンストラクタ
+    this(Platform platform, cl_device_id deviceId){
+        _platform = platform;
+        _deviceId = deviceId;
+        cl_errcode err;
+        
+        auto id = info!(Info.Platform);
+        int[] cps = [0];
+        _context = clCreateContext( cast(cl_context_properties*)cps.ptr,
+                                    1,
+                                    &_deviceId,
+                                    null,
+                                    null,
+                                    &err);
+        assert(err == CL_SUCCESS);
+        
+        _taskManager = new TaskManager(this);
+    }
+    
+    
+    ~this(){
+        clReleaseContext(_context);
+    }
+    
     
     ///内部で保持している値を返します
     @property
@@ -49,40 +73,10 @@ public:
     
     ///ditto
     @property
-    cl_command_queue clCommandQueue(){
-        return _commandQueue;
+    TaskManager taskManager(){
+        return _taskManager;
     }
         
-    
-    ///コンストラクタ
-    this(Platform platform, cl_device_id deviceId){
-        _platform = platform;
-        _deviceId = deviceId;
-        cl_errcode err;
-        
-        auto id = info!(Info.Platform);
-        int[] cps = [0];
-        _context = clCreateContext( cast(cl_context_properties*)cps.ptr,
-                                    1,
-                                    &_deviceId,
-                                    null,
-                                    null,
-                                    &err);
-        assert(err == CL_SUCCESS);
-        
-        _commandQueue = clCreateCommandQueue(   _context,
-                                                _deviceId,
-                                                0,
-                                                &err);
-        assert(err == CL_SUCCESS);              
-    }
-    
-    
-    ~this(){
-        clReleaseContext(_context);
-        clReleaseCommandQueue(_commandQueue);
-    }
-    
     
     ///デバイスのタイプ
     enum Type : cl_bitfield{
@@ -217,68 +211,44 @@ public:
     
     ///このデバイスに関連付けられているコマンドをすべて実行します。
     void flush(){
-        clFlush(_commandQueue);
+        _taskManager.flush();
     }
     
     
     ///このデバイスに関連付けられているコマンドをすべて実行します。
     void finish(){
-        clFinish(_commandQueue);
+        _taskManager.finish();
     }
     
     
     ///このデバイスに関連付けられているコマンドをすべて実行します(同期)
     void execute(){
-        flush();
-        finish();
+        _taskManager.execute();
     }
     
     
     ///rangeからバッファを作って返します
-    Buffer!(ElementType!Range) allocate(Range)(Range range, string flag = "rw")if(isInputRange!Range && !isInfinite!(Range)){
+    Array!(ElementType!Range) allocate(Range)(Range range, string flag = "rw")if(isInputRange!Range && !isInfinite!(Range)){
         auto array = array(range);
-        return new typeof(return)(this, array, flag);
+        auto dst = typeof(return)(new Buffer(this, array.length * ElementType!Range.sizeof, flag), 0, array.length);
+        dst.copy(array);
+        return dst;
     }
     
     
     ///lengthの長さを持つバッファを作成し、かえします。
-    Buffer!T allocate(T)(size_t length, string flag = "rw"){
-        return new Buffer!T(this, length, flag);
+    Array!T allocate(T)(size_t length, string flag = "rw"){
+        return typeof(return)(new Buffer(this, length * T.sizeof, flag), 0, length);
     }
     
-    /+
-    ///このデバイスで単純な繰り返し動作を行うようにします
-    Buffer!(ElementType!(Range))
-     parallelForeach(string structStr = "", Range)
-        (Tuple!(size_t, size_t) dim, Range range, string repeatBody)if(isInputRange!(Range))
-    {
-        alias ElementType!(Range) E;
-        repeatBody = structStr ~ "\n\n__kernel void foreachFunction(__global " ~ E.stringof ~ "* range, __global " ~ E.stringof ~"* result){\n"
-        ~ "size_t i = get_global_id(0);\n"
-        ~ E.stringof ~ " a = range[i], b = result[i];" ~ repeatBody ~ "\n result[i] = b;\n}\n";
-        
-        auto rangeArray = array(take(range, dim[0]));
-        if(rangeArray.length < dim[0]){
-            dim[0] = rangeArray.length;
-        }
-        
-        auto input = this.allocate(rangeArray);
-        auto result = this.allocate!(typeof(range.front))(dim[0]);
-        
-        this.build(repeatBody).kernel("foreachFunction").set([dim], input, result);
-        this.execute();
-        return result;
-    }+/
     
     ///このデバイスで単純な繰り返し動作を行います。
-    void Foreach(string header = "", I, Captures...)(Tuple!(I, I)[] dims, Captures captures, string repeatBody)
+    Event Foreach(string header = "", I, Captures...)(Tuple!(I, I)[] dims, Captures captures, string repeatBody)
     in{
         assert(dims.length <= 3);
         assert(dims.length != 0);
     }
     body{
-        
-        
         string[string] createTupleHeaders(){
             string[string] dst;
             
@@ -291,7 +261,7 @@ public:
                 }else static if(isInputRange!E && isTuple!(ElementType!E)){
                     auto code = createTupleCode!(ElementType!E)();
                     dst[code.name] ~= code.code ~ "\n";
-                }else static if(isBuffer!E && isTuple!(typeof(E.init.array[0]))){
+                }else static if(isArray!E && isTuple!(typeof(E.init.array[0]))){
                     auto code = createTupleCode!(typeof(E.init.array[0]))();
                     dst[code.name] ~= code.code ~ "\n";
                 }
@@ -319,8 +289,8 @@ public:
                         cbody ~= "_" ~ k.stringof;
                     cbody ~= "* " ~ cast(immutable(char))('a' + i);
                 }else
-                    cbody ~= "__global " ~ ElementType!(U).stringof ~ "* " ~ cast(immutable(char))('a' + i);
-            }else static if(isBuffer!U){
+                    cbody ~= "__global " ~ Unqual!(typeof(U.init[0])).stringof ~ "* " ~ cast(immutable(char))('a' + i);
+            }else static if(isArray!U){
                 alias typeof(U.init.array[0]) V;
                 static if(isTuple!V){
                     alias typeof(V.init.tupleof) K;
@@ -354,17 +324,16 @@ public:
         
         cbody ~= repeatBody ~ "\n}\n";
         
-        auto buf = toBuffer(captures);
-        import std.stdio;
+        auto buf = toArray(captures);
+        //import std.stdio;
         //writeln(cbody);
-        this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
-        
-        this.execute();
+        return this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
     }
     
     private Tuple!(string, "name", string, "code") createTupleCode(T)(T a = T.init)if(isTuple!T){
         alias typeof(T.init.tupleof) E;
-        static assert(allSatisfy!(isBasicType, E), "Foreach can get array, or tuple of basic types, or OpenCL C basic type.");
+        
+        //static assert(allSatisfy!(isBasicType, E), "Foreach can get array, or tuple of basic types, or OpenCL C basic type.");
         
         string name = " Tuple_";
         string cbody;
@@ -385,20 +354,20 @@ public:
             return type;
     }
     
-    private template BufferType(T){
+    private template ArrayType(T){
         static if(isInputRange!T)
-            alias Buffer!(ElementType!T) BufferType;
+            alias Array!(ElementType!T) ArrayType;
         else
-            alias T BufferType;
+            alias Unqual!T ArrayType;
     }
     
     
-    private Tuple!(staticMap!(BufferType, T)) toBuffer(T...)(T args){
+    private Tuple!(staticMap!(ArrayType, T)) toArray(T...)(T args){
         typeof(return) dst;
         
         foreach(i, E; T){
             static if(isInputRange!E)
-                dst[i] = this.allocate(args[i]);
+                dst[i] = this.allocate(args[i].array);
             else
                 dst[i] = args[i];
         }

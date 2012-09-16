@@ -3,6 +3,7 @@
 import cl4d.c.cl;
 import cl4d.device;
 import cl4d.kernel;
+import cl4d.taskmanager;
 
 import std.array;
 import std.algorithm;
@@ -85,8 +86,8 @@ public:
     
     
     ///opDispatch
-    void opDispatch(string kernelName, T...)(Tuple!(size_t, size_t)[] dims, T args){
+    Event opDispatch(string kernelName, T...)(Tuple!(size_t, size_t)[] dims, T args){
         auto kernel = new Kernel(this, kernelName);
-        kernel.set(dims, args);
+        return kernel.set(dims, args);
     }
 }

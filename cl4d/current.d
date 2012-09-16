@@ -3,13 +3,16 @@
 import cl4d.c.cl;
 import cl4d.platform;
 import cl4d.device;
+import cl4d.taskmanager;
 
-///プログラムが使用可能なリソースを表します。
-Current clCurrent;
 
 static this(){
     clCurrent = new Current();
 }
+
+
+///プログラムが使用可能なリソースを表します。
+Current clCurrent;
 
 
 ///ditto
@@ -17,9 +20,6 @@ class Current{
 private:
     //使用可能なplatformのリストです
     Platform[] enablePlatforms;
-
-    //platform毎の使用可能なdeviceのリストです
-    Device[][Platform] enableDevices;
 
 public:
     this(){
@@ -36,9 +36,6 @@ public:
 
         foreach(pId; _pfs)
             enablePlatforms ~= new Platform(pId);
-
-        foreach(pf; enablePlatforms)
-            enableDevices[pf] ~= pf.devices();
     }
 
     
@@ -49,25 +46,18 @@ public:
     }
     
     
-    ///プログラムで使用可能なopencl対応デバイスを返す
-    @property
-    Device[][Platform] devices(){
-        return enableDevices;
-    }
-    
-    
     ///すべてのデバイスで処理が終了するまで待つ
     void finish(){
-        foreach(ds; enableDevices.values)
-            foreach(d; ds)
+        foreach(p; enablePlatforms)
+            foreach(d; p.devices)
                 d.finish();
     }
     
     
     ///すべてのデバイスに関連付けられているコマンドキューを実行します
     void flush(){
-        foreach(ds; enableDevices.values)
-            foreach(d; ds)
+        foreach(p; enablePlatforms)
+            foreach(d; p.devices)
                 d.flush();
     }
     

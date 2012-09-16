@@ -13,9 +13,11 @@ module cl4d.c.cl;
 
 public import cl4d.c.cl_platform;
 import std.typecons :   Proxy;
-
+/*
 version(CL_VERSION_1_2)
-	version = CL_VERSION_1_1;
+	version = CL_VERSION_1_1;*/
+    
+version = CL_VERSION_1_2;
 
 // a helper function to make elements of enums accessable without EnumType. prefix
 package string bringToCurrentScope(alias EnumType)()
@@ -1193,7 +1195,7 @@ alias extern(System) void function(
 	void*) evt_notify_fn;
 
 //!
-version(CL_VERSION_1_1)
+//version(CL_VERSION_1_1)
 cl_errcode clSetEventCallback( cl_event	event,
                     cl_int			command_exec_callback_type,
                     evt_notify_fn	pfn_notify,
@@ -1531,6 +1533,11 @@ cl_errcode clEnqueueMarkerWithWaitList(
 	cl_event*         event
 );
 
+cl_errcode clEnqueueMarker(
+	cl_command_queue  command_queue,
+	cl_event*         event
+);
+
 version(CL_VERSION_1_2)
 //!
 cl_errcode clEnqueueBarrierWithWaitList(
@@ -1538,6 +1545,10 @@ cl_errcode clEnqueueBarrierWithWaitList(
 	cl_uint           num_events_in_wait_list,
 	const(cl_event)*  event_wait_list,
 	cl_event*         event
+);
+
+cl_errcode clEnqueueBarrier(
+	cl_command_queue  command_queue
 );
 
 alias extern(System) void function(

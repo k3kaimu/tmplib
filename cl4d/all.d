@@ -7,4 +7,5 @@ public import cl4d.c.cl,
               cl4d.current,
               cl4d.buffer,
               cl4d.kernel,
-              cl4d.program;
+              cl4d.program,
+              cl4d.taskmanager;

@@ -7,10 +7,31 @@ import cl4d.device;
 class Platform{
 private:
     cl_platform_id _platform;
+    Device[] _devices;
     
 public:
     this(cl_platform_id clPlatformID){
         _platform = clPlatformID;
+        
+        cl_uint num;
+        cl_device_id[] devices;
+        cl_errcode err = clGetDeviceIDs(_platform,
+                                        CL_DEVICE_TYPE_ALL,
+                                        0,
+                                        null,
+                                        &num);
+        assert(err == CL_SUCCESS);
+        devices = new cl_device_id[num];
+        
+        err = clGetDeviceIDs(_platform,
+                             CL_DEVICE_TYPE_ALL,
+                             num,
+                             devices.ptr,
+                             null);
+        assert(err == CL_SUCCESS);
+        
+        foreach(d; devices)
+            _devices ~= new Device(this, d);
     }
     
     ///idを取得します
@@ -48,29 +69,27 @@ public:
     ///deviceTypeなdeviceを取得します。
     Device[] devices(Device.Type deviceType = Device.Type.All)
     {
-        import std.stdio;
-        cl_uint num;
-        cl_device_id[] devices;
-        cl_errcode err = clGetDeviceIDs(_platform,
-                                    *cast(cl_device_type*)&deviceType,
-                                    0,
-                                    null,
-                                    &num);
-        
-        devices = new cl_device_id[num];
-        
-        err = clGetDeviceIDs(_platform,
-                             *cast(cl_device_type*)&deviceType,
-                             num,
-                             devices.ptr,
-                             null);
-        assert(err == CL_SUCCESS);
-
-        Device[] dst;
-        
-        foreach(d; devices)
-            dst ~= new Device(this, d);
-        
-        return dst;
+        return _devices;
+    }
+    
+    
+    ///このPlatformに所属するデバイス全てのコマンドキューをflushします
+    void flush(){
+        foreach(d; _devices)
+            d.flush();
+    }
+    
+    
+    ///このPlatformに所属するデバイス全てのコマンドが終わるまで待ちます。
+    void finish(){
+        foreach(d; _devices)
+            d.finish();
+    }
+    
+    
+    ///このPlatformに所属するデバイス全てにflushし、終わるまで待ちます。
+    void execute(){
+        this.flush();
+        this.finish();
     }
 }

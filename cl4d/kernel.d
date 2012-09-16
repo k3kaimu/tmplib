@@ -3,6 +3,7 @@
 import cl4d.c.cl;
 import cl4d.buffer;
 import cl4d.program;
+import cl4d.taskmanager;
 
 import std.string;
 import std.typecons;
@@ -42,26 +43,26 @@ public:
     
     
     ///Kernelに実行時のスレッド数と引数とセットし、実行するようにコマンドキューに入れ込みます。
-    void set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
+    Event set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
         cl_errcode err;
         foreach(idx, U; T){
-            static if(isBuffer!U){
-                cl_mem buf = args[idx].clBuffer;
+            static if(isArray!U){
+                cl_mem buf = args[idx].buffer.clMem;
                 err = clSetKernelArg(   _kernel,
                                         idx,
                                         size_t.sizeof,
                                         &buf);
             }else static if(is(U == Local)){
-                err = clSetKernelArg(_kernel,
-                                                idx,
-                                                args[idx].size,
-                                                null);
+                err = clSetKernelArg(   _kernel,
+                                        idx,
+                                        args[idx].size,
+                                        null);
             }else{
                 auto tmp = args[idx];
-                err = clSetKernelArg(_kernel,
-                                                idx,
-                                                U.sizeof,
-                                                &tmp);
+                err = clSetKernelArg(   _kernel,
+                                        idx,
+                                        U.sizeof,
+                                        &tmp);
             }
             
             //import std.stdio;
@@ -72,18 +73,26 @@ public:
         size_t[] global = array(map!"a[0]"(dims));
         size_t[] local =  array(map!"a[1]"(dims));
         
-        err = clEnqueueNDRangeKernel(   _program.device.clCommandQueue,
-                                        _kernel,
-                                        dims.length,
-                                        null,
-                                        global.ptr,
-                                        local.ptr,
-                                        0,
-                                        null,
-                                        null);
-        
-        assert(err == CL_SUCCESS);
+        return _program.device.taskManager.addTask({
+            cl_event event;
+            err = clEnqueueNDRangeKernel(   _program.device.taskManager.clCommandQueue,
+                                            _kernel,
+                                            dims.length,
+                                            null,
+                                            global.ptr,
+                                            local.ptr,
+                                            0,
+                                            null,
+                                            &event);
+            args = typeof(args).init;
+            assert(err == CL_SUCCESS);
+            return event;
+        });
     }
 }
 
 private struct Local{}
+
+void clEnqueueNDRangeKernelException(cl_errcode err){
+    assert(err == CL_SUCCESS);
+}
