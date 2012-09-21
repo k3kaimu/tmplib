@@ -7,12 +7,12 @@ import cl4d.taskmanager;
 
 
 static this(){
-    clCurrent = new Current();
+    OpenCL = new Current();
 }
 
 
 ///プログラムが使用可能なリソースを表します。
-Current clCurrent;
+Current OpenCL;
 
 
 ///ditto
@@ -32,6 +32,7 @@ public:
         err = clGetPlatformIDs( num,
                                 _pfs.ptr,
                                 null);
+        
         assert(err == CL_SUCCESS);
 
         foreach(pId; _pfs)

@@ -86,8 +86,8 @@ public:
     
     
     ///opDispatch
-    Event opDispatch(string kernelName, T...)(Tuple!(size_t, size_t)[] dims, T args){
+    Kernel opDispatch(string kernelName, T...)(T args){
         auto kernel = new Kernel(this, kernelName);
-        return kernel.set(dims, args);
+        return kernel.setParameter(args);
     }
 }

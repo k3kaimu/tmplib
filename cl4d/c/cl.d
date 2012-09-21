@@ -12,12 +12,14 @@
 module cl4d.c.cl;
 
 public import cl4d.c.cl_platform;
-import std.typecons :   Proxy;
-/*
-version(CL_VERSION_1_2)
-	version = CL_VERSION_1_1;*/
-    
+import std.typecons : Proxy;
+
 version = CL_VERSION_1_2;
+
+version(CL_VERSION_1_2)
+	version = CL_VERSION_1_1;
+    
+
 
 // a helper function to make elements of enums accessable without EnumType. prefix
 package string bringToCurrentScope(alias EnumType)()

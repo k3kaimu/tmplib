@@ -327,7 +327,7 @@ public:
         auto buf = toArray(captures);
         //import std.stdio;
         //writeln(cbody);
-        return this.build(cbody).kernel("foreachFunction").set(dims, buf.field);
+        return this.build(cbody).kernel("foreachFunction").set(buf.field)(dims);
     }
     
     private Tuple!(string, "name", string, "code") createTupleCode(T)(T a = T.init)if(isTuple!T){

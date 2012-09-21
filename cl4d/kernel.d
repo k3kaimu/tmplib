@@ -41,7 +41,7 @@ public:
         return _kernel;
     }
     
-    
+    /+
     ///Kernelに実行時のスレッド数と引数とセットし、実行するようにコマンドキューに入れ込みます。
     Event set(SizeT, T...)(Tuple!(SizeT, SizeT)[] dims, T args)if(is(SizeT : size_t)){
         cl_errcode err;
@@ -88,7 +88,67 @@ public:
             assert(err == CL_SUCCESS);
             return event;
         });
+    }+/
+    
+    Kernel setParameter(size_t offset = 0, T...)(T args)
+    {
+        static if(T.length == 0)
+            return this;
+        else{
+            
+            cl_errcode err;
+            alias T[0] U;
+            
+            static if(cl4d.buffer.isArray!U){
+                cl_mem buf = args[0].buffer.clMem;
+                err = clSetKernelArg(   _kernel,
+                                        offset,
+                                        size_t.sizeof,
+                                        &buf);
+            }else static if(is(U == Local)){
+                err = clSetKernelArg(   _kernel,
+                                        offset,
+                                        args[0].size,
+                                        null);
+            }else{
+                auto tmp = args[0];
+                err = clSetKernelArg(   _kernel,
+                                        offset,
+                                        U.sizeof,
+                                        &tmp);
+            }
+             assert(err == CL_SUCCESS);
+            
+            return setParameter!(offset + 1)(args[1..$]);
+        }
     }
+    
+    
+    Event opCall(Tuple!(size_t, size_t)[] dims...)
+    in{
+        assert(dims.length <= 3);
+    }
+    body{
+        size_t[] global = array(map!"a[0]"(dims));
+        size_t[] local =  array(map!"a[1]"(dims));
+        
+        return _program.device.taskManager.addTask({
+            cl_event event;
+            cl_errcode err;
+            err = clEnqueueNDRangeKernel(   _program.device.taskManager.clCommandQueue,
+                                            _kernel,
+                                            dims.length,
+                                            null,
+                                            global.ptr,
+                                            local.ptr,
+                                            0,
+                                            null,
+                                            &event);
+            assert(err == CL_SUCCESS);
+            return event;
+        });
+    }
+    
 }
 
 private struct Local{}
