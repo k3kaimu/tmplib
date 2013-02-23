@@ -1,5 +1,11 @@
-/*
+/**
+HMAC implemented by D.
+
+Author: Kazuki Komatsu(k3_kaimu)
+Licence: NYSL(http://www.kmonos.net/nysl/NYSL.TXT)
 */
+module hmac;
+
 import std.digest.sha;
 import std.digest.md;
 
