@@ -1,7 +1,7 @@
 /**
 HMAC implemented by D.
 
-Author: Kazuki Komatsu(k3_kaimu)
+Author: Kazuki Komatsu
 Licence: NYSL(http://www.kmonos.net/nysl/NYSL.TXT)
 */
 module hmac;
@@ -27,7 +27,7 @@ private:
         enum blockSize = Hask.blockSize;    // ...
 
 public:
-    this(const(ubyte)[] key){
+    this(const(ubyte)[] key) pure nothrow @safe {
         _ipad.length = blockSize;
         _opad.length = blockSize;
 
@@ -108,7 +108,7 @@ unittest{
 }
 
 unittest{
-    //// HMAC-SHA1 test case : http://www.ipa.go.jp/security/rfc/RFC2202JA.html
+    // HMAC-SHA1 test case : http://www.ipa.go.jp/security/rfc/RFC2202JA.html
     import std.algorithm, std.range, std.array, std.digest.digest;
 
     auto hmac_sha1 = HMAC!(SHA1)(array(take(repeat(cast(ubyte)0x0b), 20)));
