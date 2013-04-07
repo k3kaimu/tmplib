@@ -2,7 +2,7 @@
 HMAC implemented by D.
 
 Author: Kazuki Komatsu
-Licence: NYSL(http://www.kmonos.net/nysl/NYSL.TXT)
+Licence: NYSL
 */
 module hmac;
 
