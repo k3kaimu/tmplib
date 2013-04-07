@@ -24,7 +24,7 @@ private:
     static if(is(Hash == std.digest.sha.SHA1) || is(Hash == std.digest.md.MD5))
         enum blockSize = 64;
     else 
-        enum blockSize = Hask.blockSize;    // ...
+        enum blockSize = Hash.blockSize;    // ...
 
 public:
     this(const(ubyte)[] key) pure nothrow @safe {
